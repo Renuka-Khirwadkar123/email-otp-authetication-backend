@@ -1,7 +1,9 @@
 // Core modules and dependencies
 require('dotenv').config();
 const fs = require('fs');
+const path = require('path');
 const express = require("express");
+const cors = require('cors');
 const readline = require("readline");
 
 // Load email credentials from credentials.json (expects { emailUser, emailPass })
@@ -42,17 +44,17 @@ async function sendEmail(toEmail, otp) {
   console.log('Email sent:', info.messageId);
 }
 
-// Middleware to parse JSON, serve static files, and parse URL-encoded form bodies
+// Middleware to parse JSON, parse URL-encoded form bodies, and enable CORS
 app.use(express.json());
-app.use(express.static("../frontend/public"));
+app.use(cors());
 app.use(express.urlencoded({ extended: true }));
 
-// Health-check / root route
+// API health-check route (returns JSON instead of serving HTML)
 app.get("/", (req, res) => {
-  res.sendFile("../frontend/public/login.html");
+  res.json({ message: "OTP Authentication Backend is running" });
 });
 
-// Route: receive email address, generate OTP, email it, then redirect user to verify page
+// Route: receive email address, generate OTP, email it, then return success
 app.post("/send-otp", async (req, res) => {
   const email = req.body.email;
   const otp = generateOTP();
@@ -63,23 +65,23 @@ app.post("/send-otp", async (req, res) => {
 
   try {
     await sendEmail(email, otp);
-    // After successful send, redirect the client to the verification UI
-    res.redirect("/verify.html");
+    // After successful send, return success response
+    res.status(200).json({ success: true, message: "OTP sent successfully" });
   } catch (error) {
-    // If sending fails, return a 500 with a short message to the client
-    res.status(500).send("Failed to send OTP. Please check server credentials and try again.");
+    // If sending fails, return a 500 with error message
+    res.status(500).json({ success: false, message: "Failed to send OTP. Please check server credentials and try again." });
   }
 });
 
 // Route: verify submitted OTP against the one stored in memory
-app.post("/verify-Otp", (req, res) => {
+app.post("/verify-otp", (req, res) => {
   const userOtp = req.body.otp;
   if (userOtp === currentOTP) {
-    // OTP matches: show success page
-    res.redirect("/success.html");
+    // OTP matches: return success
+    res.status(200).json({ success: true, message: "OTP verified successfully" });
   } else {
-    // OTP mismatch: return to verify page with an error flag
-    res.redirect("/verify.html?error=true");
+    // OTP mismatch: return error
+    res.status(401).json({ success: false, message: "Invalid OTP" });
   }
 });
 
